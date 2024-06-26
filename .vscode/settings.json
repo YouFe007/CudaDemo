@@ -1,0 +1,10 @@
+{
+    "git.ignoreLimitWarning": true,
+    "cmake.configureOnOpen": false,
+    "files.associations": {
+        "*.rmd": "markdown",
+        "*.c": "c",
+        "ostream": "cpp",
+        "iostream": "cpp"
+    }
+}

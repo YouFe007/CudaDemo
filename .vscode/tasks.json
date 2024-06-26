@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "/usr/local/cuda-11.1/bin/nvcc",
+            "args": [
+                "-g",
+                "-G",
+                "-o",
+                "${workspaceFolder}/self_attention/build/a.out",
+                "${workspaceFolder}/self_attention/scaled_dot_product_attention_kernel_pure_c.cu"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
