@@ -1,4 +1,0 @@
-# ninja log v5
-2	13182	1718941453792415600	/mnt/d/projects/yousixia_learn/LearnCuda/self_attention/build/temp.linux-x86_64-cpython-38/scaled_dot_product_attention_kernel.o	5ccde39d243fd3e4
-2	19644	1718941460163090300	/mnt/d/projects/yousixia_learn/LearnCuda/self_attention/build/temp.linux-x86_64-cpython-38/scaled_dot_product_attention_kernel_with_torch.o	c4857e0f32890420
-3	910	1718941466396397100	/mnt/d/projects/yousixia_learn/LearnCuda/self_attention/build/temp.linux-x86_64-cpython-38/scaled_dot_product_attention_kernel_pure_c.o	f4bb14af406b3490
