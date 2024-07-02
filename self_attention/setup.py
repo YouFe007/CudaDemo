@@ -5,12 +5,13 @@ setup(
     name='scaled_dot_product_attention',
     ext_modules=[
         CUDAExtension('scaled_dot_product_attention_cuda', [
+            'kernel.cu',
             'scaled_dot_product_attention_kernel_with_torch.cu',
             'scaled_dot_product_attention_kernel_pure_c.cu',
             'scaled_dot_product_attention_kernel.cpp',
         ],
         extra_compile_args={'cxx': ['-g'],
-                            'nvcc': ['-O0', '-G', '-lineinfo']}),
+                            'nvcc': ['-O0', '-G']}),
     ],
     cmdclass={
         'build_ext': BuildExtension

@@ -2,44 +2,64 @@
 #include <iostream>
 #include <random>
 #include <utility>
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
+#include <pybind11/embed.h>
 
-// #include "scaled_dot_product_attention.h"
+#include "scaled_dot_product_attention.h"
 
-extern "C" __global__ void scaled_dot_product_attention(
-    const float* queries, const float* keys, float* outputs,
-    int batch_size, int seq_len, int d_k, float scale) {
-        // 确定当前线程负责的元素位置
-        int batch = blockIdx.x;
-        int i = threadIdx.x;
-        int j = threadIdx.y;
+namespace py = pybind11;
 
-        // 确保线程索引在合法范围内
-        if (i < seq_len && j < seq_len) {
-            float sum = 0.0;
-            for (int k = 0; k < d_k; ++k) {
-                sum += queries[batch * seq_len * d_k + i * d_k + k] *
-                    keys[batch * seq_len * d_k + j * d_k + k];
-            }
-            if ((batch == 0) && (threadIdx.x == 0 && threadIdx.y == 0)) {
-                printf("Block %d\n", blockIdx.x);
-                printf("sum %f\n", sum);
-            }
-            outputs[batch * seq_len * seq_len + i * seq_len + j] = sum * scale;
+
+int getCudaCoresPerSM(int major, int minor) {
+    // 根据不同的架构，返回每个 SM 的 CUDA 核心数
+    // 注意：这里的值可能需要根据最新的 GPU 和 CUDA 版本进行更新
+    if (major == 1) { // Tesla
+        return 8;
+    } else if (major == 2) { // Fermi
+        return 32;
+    } else if (major == 3) { // Kepler
+        return 192;
+    } else if (major == 5) { // Maxwell
+        return 128;
+    } else if (major == 6) { // Pascal
+        return (minor == 1 ? 128 : 64);
+    } else if (major == 7) { // Volta & Turing
+        return 64;
+    } else if (major == 8) { // Ampere
+        // 这里是一个假设的值，需要根据具体型号调整
+        return 64;
+    } else {
+        // 未知架构
+        return -1;
     }
 }
 
-void printDeviceProperties(){
+void printDeviceProperties() {
     int deviceCount;
     cudaGetDeviceCount(&deviceCount);
     for (int device = 0; device < deviceCount; device++) {
         cudaDeviceProp deviceProp;
         cudaGetDeviceProperties(&deviceProp, device);
-        printf("Device %d: %s\n", device, deviceProp.name);
-        printf("  Total amount of global memory: %.2f GB\n", deviceProp.totalGlobalMem / (1024.0 * 1024.0 * 1024.0));
-        printf("  Max threads per block: %d\n", deviceProp.maxThreadsPerBlock);
-        printf("  Max threads per multiprocessor: %d\n", deviceProp.maxThreadsPerMultiProcessor);
-        printf("  Max dimensions of block: (%d, %d, %d)\n", deviceProp.maxThreadsDim[0], deviceProp.maxThreadsDim[1], deviceProp.maxThreadsDim[2]);
-        printf("  Max dimensions of grid: (%d, %d, %d)\n", deviceProp.maxGridSize[0], deviceProp.maxGridSize[1], deviceProp.maxGridSize[2]);
+        std::cout << "Device " << device << ": " << deviceProp.name << std::endl;
+        std::cout << "  Total amount of global memory: " << deviceProp.totalGlobalMem / (1024.0 * 1024.0 * 1024.0) << " GB" << std::endl;
+        std::cout << "  Shared memory per block: " << deviceProp.sharedMemPerBlock / 1024.0 << " KB" << std::endl;
+        std::cout << "  Shared memory per multiprocessor: " << deviceProp.sharedMemPerMultiprocessor / 1024.0 << " KB" << std::endl;
+        std::cout << "  L2 cache size: " << deviceProp.l2CacheSize / 1024.0 << " KB" << std::endl;
+        std::cout << "  Constant memory size: " << deviceProp.totalConstMem / 1024.0 << " KB" << std::endl;
+        std::cout << "  Registers per block: " << deviceProp.regsPerBlock << std::endl;
+        std::cout << "  Registers per multiprocessor: " << deviceProp.regsPerMultiprocessor << std::endl;
+        std::cout << "  Max threads per block: " << deviceProp.maxThreadsPerBlock << std::endl;
+        std::cout << "  Max threads per multiprocessor: " << deviceProp.maxThreadsPerMultiProcessor << std::endl;
+        std::cout << "  Max dimensions of block: (" << deviceProp.maxThreadsDim[0] << ", " << deviceProp.maxThreadsDim[1] << ", " << deviceProp.maxThreadsDim[2] << ")" << std::endl;
+        std::cout << "  Max dimensions of grid: (" << deviceProp.maxGridSize[0] << ", " << deviceProp.maxGridSize[1] << ", " << deviceProp.maxGridSize[2] << ")" << std::endl;
+        std::cout << "  Number of SMs: " << deviceProp.multiProcessorCount << std::endl;
+        int cudaCoresPerSM = getCudaCoresPerSM(deviceProp.major, deviceProp.minor);
+        if (cudaCoresPerSM > 0) {
+            std::cout << "  CUDA Cores: " << cudaCoresPerSM * deviceProp.multiProcessorCount << std::endl;
+        } else {
+            std::cout << "  CUDA Cores: Unknown (compute capability " << deviceProp.major << "." << deviceProp.minor << ")" << std::endl;
+        }
     }
 }
 
@@ -73,7 +93,7 @@ std::pair<dim3, dim3> calculateBestConfig(int seq_len, int batch_size) {
     return std::make_pair(blocks, threads);
 }
 
-void scaled_dot_product_attention_pure_c_wrapper(
+void scaled_dot_product_attention_pure_c(
     const float* h_queries,
     const float* h_keys,
     float* h_outputs,
@@ -125,6 +145,24 @@ void scaled_dot_product_attention_pure_c_wrapper(
     checkCudaError(cudaFree(d_outputs));
 }
 
+void scaled_dot_product_attention_pure_c_wrapper(
+    py::array_t<float> queries,
+    py::array_t<float> keys,
+    py::array_t<float> outputs,
+    int batch_size, int seq_len, int d_k, float scale) {
+    // 获取 buffer_info 对象，它包含指向数据的指针和其他元信息
+    py::buffer_info queries_buf = queries.request();
+    py::buffer_info keys_buf = keys.request();
+    py::buffer_info outputs_buf = outputs.request();
+
+    // 获取指向实际数据的指针
+    float* h_queries = static_cast<float*>(queries_buf.ptr);
+    float* h_keys = static_cast<float*>(keys_buf.ptr);
+    float* h_outputs = static_cast<float*>(outputs_buf.ptr);
+    
+    scaled_dot_product_attention_pure_c(h_queries, h_keys, h_outputs, batch_size, seq_len, d_k, scale);
+}
+
 int main() {
     printDeviceProperties();
     // 假设的参数值
@@ -153,12 +191,10 @@ int main() {
     }
 
     // 调用包装器函数
-    scaled_dot_product_attention_pure_c_wrapper(h_queries, h_keys, h_outputs, batch_size, seq_len, d_k, scale);
+    scaled_dot_product_attention_pure_c(h_queries, h_keys, h_outputs, batch_size, seq_len, d_k, scale);
     for (int i = 0; i < std::min(batch_size * seq_len * seq_len, 10); ++i) {
         std::cout << "h_outputs[" << i << "] = " << h_outputs[i] << std::endl;
     }
-    printf("asd\n");
-
     // 使用 h_outputs
     // ...
 
@@ -166,6 +202,7 @@ int main() {
     delete[] h_queries;
     delete[] h_keys;
     delete[] h_outputs;
+    printf("end\n");
 
     return 0;
 }

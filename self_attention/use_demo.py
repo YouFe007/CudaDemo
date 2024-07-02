@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import time
+import ctypes
 
 import scaled_dot_product_attention_cuda
 
@@ -57,23 +58,18 @@ elapsed_time_numpy = (time.time() - start_time_numpy) * 1000  # 转换为毫秒
 print(f"NumPy function elapsed time: {elapsed_time_numpy} ms")
 
 
-# 创建随机数据作为输入
-h_queries = torch.randn(batch_size, seq_len, d_k, dtype=torch.float32)
-h_keys = torch.randn(batch_size, seq_len, d_k, dtype=torch.float32)
-
-# 分配输出张量
-h_outputs = torch.empty(batch_size, seq_len, seq_len, dtype=torch.float32)
-
-# 确保张量在CPU上，并且是连续的，以便与C API兼容
-h_queries = h_queries.contiguous()
-h_keys = h_keys.contiguous()
-h_outputs = h_outputs.contiguous()
+queries = np.random.rand(batch_size, seq_len, d_k).astype(np.float32)
+keys = np.random.rand(batch_size, seq_len, d_k).astype(np.float32)
+outputs = np.empty((batch_size, seq_len, seq_len), dtype=np.float32)
 
 # 调用CUDA扩展函数
 start_time_numpy = time.time()
 
 scaled_dot_product_attention_cuda.scaled_dot_product_attention_pure_c(
-    h_queries.data_ptr(), h_keys.data_ptr(), h_outputs.data_ptr(), batch_size, seq_len, d_k, scale
+    queries,
+    keys,
+    outputs,
+    batch_size, seq_len, d_k, scale
 )
 elapsed_time_numpy = (time.time() - start_time_numpy) * 1000  # 转换为毫秒
-print(f"NumPy function elapsed time: {elapsed_time_numpy} ms")
+print(f"pure c cuda function elapsed time: {elapsed_time_numpy} ms")
