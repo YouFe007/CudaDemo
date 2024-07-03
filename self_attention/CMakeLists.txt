@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
-project(my_cuda_project LANGUAGES CXX CUDA)
+project(cuda_demo LANGUAGES CXX CUDA)
 
 # 指定 CUDA 架构（如果需要）
-set(CMAKE_CUDA_ARCHITECTURES 75) # 根据您的 GPU 调整这个值
+set(CMAKE_CUDA_ARCHITECTURES 75) # 根据 GPU 型号调整这个值
 
 # 添加包含目录
 include_directories(${CMAKE_SOURCE_DIR})
@@ -27,16 +27,13 @@ link_directories(${PYTHON_LIBRARY_DIR})
 # 添加可执行文件
 add_executable(use_demo ${SOURCE_FILES})
 
-# 指定链接库（如果有）
-# target_link_libraries(use_demo PRIVATE some_library)
-
 # 设置 C++ 标准
 set_property(TARGET use_demo PROPERTY CXX_STANDARD 14)
 
 # 设置 CUDA 标准
 set_property(TARGET use_demo PROPERTY CUDA_STANDARD 14)
 
-# 如果需要，可以指定编译选项
+# 可执行程序包含debug信息
 target_compile_options(use_demo PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-g -G>)
 
 find_library(PYTHON_LIB python3.8 PATHS ${PYTHON_LIBRARY_DIR} NO_DEFAULT_PATH)
